@@ -233,19 +233,20 @@ styleclean: $(STYLECHECKFILES:=.styleclean)
 ifeq ($(STLINK_PORT),)
 ifeq ($(BMP_PORT),)
 ifeq ($(OOCD_FILE),)
-%.flash: %.elf
+%.flash: %.bin
 	@printf "  FLASH   $<\n"
-	(echo "halt; program $(realpath $(*).elf) verify reset" | nc -4 localhost 4444 2>/dev/null) || \
+	(echo "halt; program $(realpath $<) verify reset" | nc -4 localhost 4444 2>/dev/null) || \
 		$(OOCD) -f interface/$(OOCD_INTERFACE).cfg \
+		-c $(OOCD_INTERFACE_SETTINGS) \
 		-f target/$(OOCD_TARGET).cfg \
-		-c "program $(*).elf verify reset exit" \
+		-c "program $< verify reset exit $(OOCD_FLASH_ADDR)" \
 		$(NULL)
 else
 %.flash: %.elf
 	@printf "  FLASH   $<\n"
 	(echo "halt; program $(realpath $(*).elf) verify reset" | nc -4 localhost 4444 2>/dev/null) || \
 		$(OOCD) -f $(OOCD_FILE) \
-		-c "program $(*).elf verify reset exit" \
+		-c "program $(*).elf verify reset exit" \ 
 		$(NULL)
 endif
 else

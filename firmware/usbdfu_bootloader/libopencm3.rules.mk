@@ -235,10 +235,11 @@ ifeq ($(BMP_PORT),)
 ifeq ($(OOCD_FILE),)
 %.flash: %.elf
 	@printf "  FLASH   $<\n"
-	(echo "halt; program $(realpath $(*).elf) verify reset" | nc -4 localhost 4444 2>/dev/null) || \
+	(echo "halt; program $(realpath $<) verify reset" | nc -4 localhost 4444 2>/dev/null) || \
 		$(OOCD) -f interface/$(OOCD_INTERFACE).cfg \
+		-c $(OOCD_INTERFACE_SETTINGS) \
 		-f target/$(OOCD_TARGET).cfg \
-		-c "program $(*).elf verify reset exit" \
+		-c "program $< verify reset exit" \
 		$(NULL)
 else
 %.flash: %.elf
