@@ -1,6 +1,11 @@
 #ifndef BM_DMM_PROTOCOL_H_
 #define BM_DMM_PROTOCOL_H_
 
+/// Data length inside packet which stores actual reading
+#define BM_NORMAL_PACKET_DATA_LENGTH 15
+/// Data length inside packet which stores Over Limit indication
+#define BM_OL_PACKET_DATA_LENGTH 7
+
 typedef struct {
     uint8_t dleS;
     uint8_t stx;
@@ -26,13 +31,13 @@ typedef struct {
 
 typedef struct {
     uint8_t d1;
-    uint8_t constDot;   // always '.', 0x2E
+    uint8_t constDotChar;   // always '.', 0x2E
     uint8_t d2;
     uint8_t d3;
     uint8_t d4;
     uint8_t d5;
     uint8_t d6;
-    uint8_t constEChar;   // always 'E', 0x45
+    uint8_t constEChar;     // always 'E', 0x45
     uint8_t exponentSign;
     uint8_t exponent;
     data_resp_tail pktTail;
@@ -52,7 +57,7 @@ typedef struct {
         data_resp_ascii_tail_long asciiAndTailLong;
         data_resp_ascii_tail_short asciiAndTailShort;
     };
-} data_resp_pkg;
+} data_resp_pkt;
 
 typedef enum {
     BM_PKG_CREATED = 0,
@@ -62,6 +67,6 @@ typedef enum {
 /**
  * Converts raw data to UART package and returns pointer to converted
  */
-bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkg* const pDestPkg);
+bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkt* const pDestPkg);
 
 #endif // BM_DMM_PROTOCOL_H_

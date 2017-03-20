@@ -3,13 +3,17 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <bool.h>
+#include <stdbool.h>
 
 /// Constants used in protocol packets
 #define BM_DLE_CONST 0x10
 #define BM_STX_CONST 0x02
 #define BM_ETX_CONST 0x03
-#define BM_PKT_DATA_LENGHT 0x0F
+#define BM_DOT_CHAR_CONST 0x2E
+#define BM_EXPONENT_CHAR_CONST 0x45
+#define BM_EXPONENT_PLUS_CHAR 0x2B
+#define BM_EXPONENT_MINUS_CHAR 0x2D
+
 /// Supported commands:
 #define BM_DATA_REQ_COMMAND 0x00
 
@@ -36,12 +40,14 @@
 #define RAW_BIT(data, bit) ((data) & (1 << (bit)))
 
 
-static void bm_fill_pkt_constants(data_resp_pkg* const pRespPack);
-static void bm_calculate_pkt_check_sum(data_resp_pkg* const pRespPack);
-static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkg* const pPkg);
+static inline void bm_fill_pkt_constants(data_resp_pkt* const pRespPack);
+static inline void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack);
+static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg);
 static uint8_t convert_digit_segs_to_val(uint8_t segments);
 
-bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkg* const pDestPkg) {
+static inline void _set_exponent_negative(data_resp_pkt* const pPkg);
+
+bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkt* const pDestPkg) {
     bm_result retVal = BM_ERROR;
 
     if (NULL != pRawData && NULL != pDestPkg) {
@@ -63,7 +69,7 @@ bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_
 }
 
 
-static inline void bm_calculate_pkt_check_sum(data_resp_pkg* const pRespPack) {
+static inline void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack) {
     if (NULL != pRespPack) {
         // check sum is calculated by XOR bytes from FUNCs, and ASCII reading
         uint8_t chkSum = pRespPack->func[0];
@@ -75,7 +81,7 @@ static inline void bm_calculate_pkt_check_sum(data_resp_pkg* const pRespPack) {
         }
 
         // apply check sum to the packet
-        if (BM_PKT_DATA_LENGHT == pRespPack->header.dataLen) {
+        if (BM_NORMAL_PACKET_DATA_LENGTH == pRespPack->header.dataLen) {
             pRespPack->asciiAndTailLong.pktTail.chkSum = chkSum;
         } else {
             pRespPack->asciiAndTailShort.pktTail.chkSum = chkSum;
@@ -84,15 +90,17 @@ static inline void bm_calculate_pkt_check_sum(data_resp_pkg* const pRespPack) {
 }
 
 
-static inline void bm_fill_pkt_constants(data_resp_pkg* const pRespPack, const uint8_t cmd) {
+static inline void bm_fill_pkt_constants(data_resp_pkt* const pRespPack, const uint8_t cmd) {
     if (NULL != pRespPack) {
         pRespPack->header.dle = BM_DLE_CONST;
         pRespPack->header.stx = BM_STX_CONST;
         pRespPack->header.cmd = cmd;
 
-        if (BM_PKT_DATA_LENGHT == pRespPack->header.dataLen) {
+        if (BM_NORMAL_PACKET_DATA_LENGTH == pRespPack->header.dataLen) {
             pRespPack->asciiAndTailLong.pktTail.etx = BM_ETX_CONST;
             pRespPack->asciiAndTailLong.pktTail.dle = BM_DLE_CONST;
+            pRespPack->asciiAndTailLong.constDotChar = BM_DOT_CHAR_CONST;
+            pRespPack->asciiAndTailLong.constEChar = BM_EXPONENT_CHAR_CONST;
         } else {
             pRespPack->asciiAndTailShort.pktTail.etx = BM_ETX_CONST;
             pRespPack->asciiAndTailShort.pktTail.dle = BM_DLE_CONST;
@@ -101,8 +109,9 @@ static inline void bm_fill_pkt_constants(data_resp_pkg* const pRespPack, const u
 }
 
 
-static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkg* const pPkg) {
-    uint8_t chByte;
+static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg) {
+    bool isOverLimit = false;
+    uint8_t chByte = 0;
     uint8_t digit = DIGIT_EMPTY;
 
 //    TEST BYTE 0
@@ -148,127 +157,142 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
 //    5   C-segment of 1st digit
 //    6   G-segment of 1st digit
 //    7   B-segment of 1st digit
-    chByte = pRawData[1];
-    // Test for beep symbol
-    if (0 != RAW_BIT(chByte, 0)) {
-        pPkg->func[1] |= BM_PROTO_SYM_BEEP;
-    }
-    // Get digit
-    digit = convert_digit_segs_to_val(chByte);
-    (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d1 = digit) : (pPkg->asciiAndTailLong.d1 = DIGIT_EMPTY) ;
+
+    // Assumption:
+    //   default sign of exponent is plus '+' and it will change to minus '-' when DMM sends 'n', 'm', 'µ' symbols.
+    pPkg->asciiAndTailLong->exponentSign = BM_EXPONENT_PLUS_CHAR;
+    do {
+        chByte = pRawData[1];
+        // Test for beep symbol
+        if (0 != RAW_BIT(chByte, 0)) {
+            pPkg->func[1] |= BM_PROTO_SYM_BEEP;
+        }
+        // Get digit
+        digit = convert_digit_segs_to_val(chByte);
+        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d1 = digit) : (pPkg->asciiAndTailLong.d1 = DIGIT_EMPTY) ;
 
 
-    //    TEST BYTE 2
-    //    Byte 2
-    //    BIT meaning
-    //    0   dot after first digit
-    //    1   E-segment of 2nd digit
-    //    2   F-segment of 2nd digit
-    //    3   A-segment of 2nd digit
-    //    4   D-segment of 2nd digit
-    //    5   C-segment of 2nd digit
-    //    6   G-segment of 2nd digit
-    //    7   B-segment of 2nd digit
+        //    TEST BYTE 2
+        //    Byte 2
+        //    BIT meaning
+        //    0   dot after first digit
+        //    1   E-segment of 2nd digit
+        //    2   F-segment of 2nd digit
+        //    3   A-segment of 2nd digit
+        //    4   D-segment of 2nd digit
+        //    5   C-segment of 2nd digit
+        //    6   G-segment of 2nd digit
+        //    7   B-segment of 2nd digit
 
-    chByte = pRawData[2];
-    // save dot place if set
-    if (0 != RAW_BIT(chByte, 0)) {
-        pPkg->asciiAndTailLong.exponent = 0; // dot after first digit in protocol means: val x 1
-    }
-    // Get digit
-    digit = convert_digit_segs_to_val(chByte);
-    (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d2 = digit) : (pPkg->asciiAndTailLong.d2 = DIGIT_EMPTY) ;
-
-
-
-    //    TEST BYTE 3
-    //    Byte 3
-    //    BIT meaning
-    //    0   dot after second digit
-    //    1   E-segment of 3rd digit
-    //    2   F-segment of 3rd digit
-    //    3   A-segment of 3rd digit
-    //    4   D-segment of 3rd digit
-    //    5   C-segment of 3rd digit
-    //    6   G-segment of 3rd digit
-    //    7   B-segment of 3rd digit
-
-    chByte = pRawData[3];
-    // save dot place if set
-    if (0 != RAW_BIT(chByte, 0)) {
-        pPkg->asciiAndTailLong.exponent = 1; // dot after second digit in protocol means: val x 10^1
-    }
-    // Get digit
-    digit = convert_digit_segs_to_val(chByte);
-    (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d3 = digit) : (pPkg->asciiAndTailLong.d3 = DIGIT_EMPTY) ;
+        chByte = pRawData[2];
+        // save dot place if set
+        if (0 != RAW_BIT(chByte, 0)) {
+            pPkg->asciiAndTailLong.exponent = 0; // dot after first digit in protocol means: val x 1
+        }
+        // Get digit
+        digit = convert_digit_segs_to_val(chByte);
+        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d2 = digit) : (pPkg->asciiAndTailLong.d2 = DIGIT_EMPTY) ;
 
 
 
-    //    TEST BYTE 4
-    //    Byte 4
-    //    BIT meaning
-    //    0   dot after third digit
-    //    1   E-segment of 4th digit
-    //    2   F-segment of 4th digit
-    //    3   A-segment of 4th digit
-    //    4   D-segment of 4th digit
-    //    5   C-segment of 4th digit
-    //    6   G-segment of 4th digit
-    //    7   B-segment of 4th digit
+        //    TEST BYTE 3
+        //    Byte 3
+        //    BIT meaning
+        //    0   dot after second digit
+        //    1   E-segment of 3rd digit
+        //    2   F-segment of 3rd digit
+        //    3   A-segment of 3rd digit
+        //    4   D-segment of 3rd digit
+        //    5   C-segment of 3rd digit
+        //    6   G-segment of 3rd digit
+        //    7   B-segment of 3rd digit
 
-    chByte = pRawData[4];
-    // save dot place if set
-    if (0 != RAW_BIT(chByte, 0)) {
-        pPkg->asciiAndTailLong.exponent = 2; // dot after third digit in protocol means: val x 10^2
-    }
-    // Get digit
-    digit = convert_digit_segs_to_val(chByte);
-    (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d4 = digit) : (pPkg->asciiAndTailLong.d4 = DIGIT_EMPTY) ;
-
-
-
-    //    TEST BYTE 5
-    //    Byte 5
-    //    BIT meaning
-    //    0   dot after fourth digit
-    //    1   E-segment of 5th digit
-    //    2   F-segment of 5th digit
-    //    3   A-segment of 5th digit
-    //    4   D-segment of 5th digit
-    //    5   C-segment of 5th digit
-    //    6   G-segment of 5th digit
-    //    7   B-segment of 5th digit
-    chByte = pRawData[5];
-    // save dot place if set
-    if (0 != RAW_BIT(chByte, 0)) {
-        pPkg->asciiAndTailLong.exponent = 3; // dot after fourth digit in protocol means: val x 10^3
-    }
-    // Get digit
-    digit = convert_digit_segs_to_val(chByte);
-    (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d5 = digit) : (pPkg->asciiAndTailLong.d5 = DIGIT_EMPTY) ;
+        chByte = pRawData[3];
+        // save dot place if set
+        if (0 != RAW_BIT(chByte, 0)) {
+            pPkg->asciiAndTailLong.exponent = 1; // dot after second digit in protocol means: val x 10^1
+        }
+        // Get digit
+        digit = convert_digit_segs_to_val(chByte);
+        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d3 = digit) : (pPkg->asciiAndTailLong.d3 = DIGIT_EMPTY) ;
 
 
-    //    TEST BYTE 6
-    //    Byte 6
-    //    BIT meaning
-    //    0   dot after fifth digit?
-    //    1   E-segment of 6th digit
-    //    2   F-segment of 6th digit
-    //    3   A-segment of 6th digit
-    //    4   D-segment of 6th digit
-    //    5   C-segment of 6th digit
-    //    6   G-segment of 6th digit
-    //    7   B-segment of 6th digit
 
-    chByte = pRawData[6];
-    // save dot place if it's set
-    if (0 != RAW_BIT(chByte, 0)) {
-        pPkg->asciiAndTailLong.exponent = 4; // dot after fifth digit in protocol means: val x 10^4
-    }
-    // Get digit
-    digit = convert_digit_segs_to_val(chByte);
-    (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d6 = digit) : (pPkg->asciiAndTailLong.d6 = DIGIT_EMPTY) ;
+        //    TEST BYTE 4
+        //    Byte 4
+        //    BIT meaning
+        //    0   dot after third digit
+        //    1   E-segment of 4th digit
+        //    2   F-segment of 4th digit
+        //    3   A-segment of 4th digit
+        //    4   D-segment of 4th digit
+        //    5   C-segment of 4th digit
+        //    6   G-segment of 4th digit
+        //    7   B-segment of 4th digit
 
+        chByte = pRawData[4];
+        // save dot place if set
+        if (0 != RAW_BIT(chByte, 0)) {
+            pPkg->asciiAndTailLong.exponent = 2; // dot after third digit in protocol means: val x 10^2
+        }
+        // Get digit
+        digit = convert_digit_segs_to_val(chByte);
+        if (DIGIT_INVALID_VALUE != digit) {
+            pPkg->asciiAndTailLong.d4 = digit;
+            // On fourth digit is displaying L symbol when reached Over Limit. If it is set then there is no need to
+            // parse next digits because packet with Over Limit indication has smaller length thus other data bits meaning.
+            if (DIGIT_L == digit) {
+                isOverLimit = true;
+                break;
+            }
+        } else {
+            pPkg->asciiAndTailLong.d4 = DIGIT_EMPTY;
+        }
+
+
+
+        //    TEST BYTE 5
+        //    Byte 5
+        //    BIT meaning
+        //    0   dot after fourth digit
+        //    1   E-segment of 5th digit
+        //    2   F-segment of 5th digit
+        //    3   A-segment of 5th digit
+        //    4   D-segment of 5th digit
+        //    5   C-segment of 5th digit
+        //    6   G-segment of 5th digit
+        //    7   B-segment of 5th digit
+        chByte = pRawData[5];
+        // save dot place if set
+        if (0 != RAW_BIT(chByte, 0)) {
+            pPkg->asciiAndTailLong.exponent = 3; // dot after fourth digit in protocol means: val x 10^3
+        }
+        // Get digit
+        digit = convert_digit_segs_to_val(chByte);
+        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d5 = digit) : (pPkg->asciiAndTailLong.d5 = DIGIT_EMPTY) ;
+
+
+        //    TEST BYTE 6
+        //    Byte 6
+        //    BIT meaning
+        //    0   dot after fifth digit?
+        //    1   E-segment of 6th digit
+        //    2   F-segment of 6th digit
+        //    3   A-segment of 6th digit
+        //    4   D-segment of 6th digit
+        //    5   C-segment of 6th digit
+        //    6   G-segment of 6th digit
+        //    7   B-segment of 6th digit
+
+        chByte = pRawData[6];
+        // save dot place if it's set
+        if (0 != RAW_BIT(chByte, 0)) {
+            pPkg->asciiAndTailLong.exponent = 4; // dot after fifth digit in protocol means: val x 10^4
+        }
+        // Get digit
+        digit = convert_digit_segs_to_val(chByte);
+        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d6 = digit) : (pPkg->asciiAndTailLong.d6 = DIGIT_EMPTY) ;
+    } while (0);
 
     //    TEST BYTE 7
     //    Byte 7
@@ -291,6 +315,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         // in this protocol need to change the exponent. Exponent already has been set when parsing digits,
         // so need to take that into account
         pPkg->asciiAndTailLong->exponent = 9 - pPkg->asciiAndTailLong->exponent; // nano's exponent is 9
+        _set_exponent_negative(pPkg);
     }
     // test for A symbol
     if (0 != RAW_BIT(chByte, 1)) {
@@ -306,12 +331,14 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         // so need to take that into account
         // todo does DMM provide combination that this will overfill?
         pPkg->asciiAndTailLong->exponent = 3 - pPkg->asciiAndTailLong->exponent; // milli's exponent is 3
+        _set_exponent_negative(pPkg);
     }
     // test for u symbol
     if (0 != RAW_BIT(chByte, 6)) {
         // in this protocol need to change the exponent. Exponent already has been set when parsing digits,
         // so need to take that into account
         pPkg->asciiAndTailLong->exponent = 6 - pPkg->asciiAndTailLong->exponent; // micro's exponent is 6
+        _set_exponent_negative(pPkg);
     }
     // test for V symbol
     if (0 != RAW_BIT(chByte, 1)) {
@@ -357,6 +384,18 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
     // test for % symbol
     if (0 != RAW_BIT(chByte, 7)) {
         pPkg->func[1] |= BM_PROTO_SYM_PERCENTAGE;
+    }
+
+
+    // Store packet length depending on type of packet
+    if (false == isOverLimit) {
+        pPkg->header->dataLen = BM_NORMAL_PACKET_DATA_LENGTH;
+    } else {
+        // Over Limit detected -> sending short packet
+        pPkg->header->dataLen = BM_OL_PACKET_DATA_LENGTH;
+        // Also need to fill appropriate data fields in Over Limit packet
+        pPkg->asciiAndTailShort->oChar = DIGIT_O;
+        pPkg->asciiAndTailShort->lChar = DIGIT_L;
     }
 
 
@@ -498,4 +537,8 @@ static uint8_t convert_digit_segs_to_val(uint8_t segments) {
     };
 
     return retVal;
+}
+
+static inline void _set_exponent_negative(data_resp_pkt* const pPkg) {
+    pPkg->asciiAndTailLong->exponentSign = BM_EXPONENT_MINUS_CHAR;
 }
