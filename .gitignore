@@ -49,3 +49,8 @@ Packages/
 # - don't show .bin or .hex files
 *.bin
 *.hex
+
+
+# - test sepcific
+# firmware/test_application/build/
+firmware/test*/build

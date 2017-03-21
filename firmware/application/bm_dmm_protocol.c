@@ -4,6 +4,17 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <string.h>
+
+#ifndef TEST
+#define STATIC static
+#define INLINE inline
+#else
+#define STATIC
+#define INLINE
+#endif
+
+
 
 /// Constants used in protocol packets
 #define BM_DLE_CONST 0x10
@@ -21,7 +32,7 @@
 #define SANWA_DATA_LEN 16
 
 /// Except of digits in range of 0-9 on display can be seen also: L (on OL measuring)) or digits can be 'empty'
-#define DIGIT_INVALID_VALUE (UINTN_MAX(8))
+#define DIGIT_INVALID_VALUE UINT8_MAX
 #define DIGIT_EMPTY         0x20
 #define DIGIT_L             0x4C
 #define DIGIT_O             0x4F
@@ -40,12 +51,12 @@
 #define RAW_BIT(data, bit) ((data) & (1 << (bit)))
 
 
-static inline void bm_fill_pkt_constants(data_resp_pkt* const pRespPack);
-static inline void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack);
-static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg);
-static uint8_t convert_digit_segs_to_val(uint8_t segments);
+STATIC INLINE void bm_fill_pkt_constants(data_resp_pkt* const pRespPack);
+STATIC INLINE void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack);
+STATIC void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg);
+STATIC uint8_t convert_digit_segs_to_val(uint8_t segments);
 
-static inline void _set_exponent_negative(data_resp_pkt* const pPkg);
+STATIC INLINE void _set_exponent_negative(data_resp_pkt* const pPkt);
 
 bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkt* const pDestPkg) {
     bm_result retVal = BM_ERROR;
@@ -69,7 +80,7 @@ bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_
 }
 
 
-static inline void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack) {
+STATIC INLINE void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack) {
     if (NULL != pRespPack) {
         // check sum is calculated by XOR bytes from FUNCs, and ASCII reading
         uint8_t chkSum = pRespPack->func[0];
@@ -90,11 +101,11 @@ static inline void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack) {
 }
 
 
-static inline void bm_fill_pkt_constants(data_resp_pkt* const pRespPack, const uint8_t cmd) {
+STATIC INLINE void bm_fill_pkt_constants(data_resp_pkt* const pRespPack) {
     if (NULL != pRespPack) {
         pRespPack->header.dle = BM_DLE_CONST;
         pRespPack->header.stx = BM_STX_CONST;
-        pRespPack->header.cmd = cmd;
+        pRespPack->header.cmd = BM_DATA_REQ_COMMAND;
 
         if (BM_NORMAL_PACKET_DATA_LENGTH == pRespPack->header.dataLen) {
             pRespPack->asciiAndTailLong.pktTail.etx = BM_ETX_CONST;
@@ -109,7 +120,7 @@ static inline void bm_fill_pkt_constants(data_resp_pkt* const pRespPack, const u
 }
 
 
-static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg) {
+STATIC void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg) {
     bool isOverLimit = false;
     uint8_t chByte = 0;
     uint8_t digit = DIGIT_EMPTY;
@@ -127,7 +138,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
 //    7   Auto symbol (auto range)
     chByte = pRawData[0];
     // Test for minus sign (negative value)
-    (0 == RAW_BIT(chByte,1)) ? pPkg->valSign = 0x20 : pPkg->valSign = 0x2D;
+    pPkg->valSign = (0 == RAW_BIT(chByte,1)) ? 0x20 : 0x2D;
 
     // Test for AC symbol
     if (0 != RAW_BIT(chByte, 2)) {
@@ -160,7 +171,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
 
     // Assumption:
     //   default sign of exponent is plus '+' and it will change to minus '-' when DMM sends 'n', 'm', 'µ' symbols.
-    pPkg->asciiAndTailLong->exponentSign = BM_EXPONENT_PLUS_CHAR;
+    pPkg->asciiAndTailLong.exponentSign = BM_EXPONENT_PLUS_CHAR;
     do {
         chByte = pRawData[1];
         // Test for beep symbol
@@ -169,7 +180,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         }
         // Get digit
         digit = convert_digit_segs_to_val(chByte);
-        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d1 = digit) : (pPkg->asciiAndTailLong.d1 = DIGIT_EMPTY) ;
+        pPkg->asciiAndTailLong.d1 = (DIGIT_INVALID_VALUE != digit) ? digit : DIGIT_EMPTY;
 
 
         //    TEST BYTE 2
@@ -191,7 +202,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         }
         // Get digit
         digit = convert_digit_segs_to_val(chByte);
-        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d2 = digit) : (pPkg->asciiAndTailLong.d2 = DIGIT_EMPTY) ;
+        pPkg->asciiAndTailLong.d2 = (DIGIT_INVALID_VALUE != digit) ? digit : DIGIT_EMPTY;
 
 
 
@@ -214,7 +225,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         }
         // Get digit
         digit = convert_digit_segs_to_val(chByte);
-        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d3 = digit) : (pPkg->asciiAndTailLong.d3 = DIGIT_EMPTY) ;
+        pPkg->asciiAndTailLong.d3 = (DIGIT_INVALID_VALUE != digit) ? digit : DIGIT_EMPTY;
 
 
 
@@ -269,7 +280,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         }
         // Get digit
         digit = convert_digit_segs_to_val(chByte);
-        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d5 = digit) : (pPkg->asciiAndTailLong.d5 = DIGIT_EMPTY) ;
+        pPkg->asciiAndTailLong.d5 = (DIGIT_INVALID_VALUE != digit) ? digit : DIGIT_EMPTY;
 
 
         //    TEST BYTE 6
@@ -291,7 +302,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         }
         // Get digit
         digit = convert_digit_segs_to_val(chByte);
-        (DIGIT_INVALID_VALUE != digit) ? (pPkg->asciiAndTailLong.d6 = digit) : (pPkg->asciiAndTailLong.d6 = DIGIT_EMPTY) ;
+        pPkg->asciiAndTailLong.d6 = (DIGIT_INVALID_VALUE != digit) ? digit : DIGIT_EMPTY;
     } while (0);
 
     //    TEST BYTE 7
@@ -314,7 +325,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
     if (0 != RAW_BIT(chByte, 2)) {
         // in this protocol need to change the exponent. Exponent already has been set when parsing digits,
         // so need to take that into account
-        pPkg->asciiAndTailLong->exponent = 9 - pPkg->asciiAndTailLong->exponent; // nano's exponent is 9
+        pPkg->asciiAndTailLong.exponent = 9 - pPkg->asciiAndTailLong.exponent; // nano's exponent is 9
         _set_exponent_negative(pPkg);
     }
     // test for A symbol
@@ -330,14 +341,14 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         // in this protocol need to change the exponent. Exponent already has been set when parsing digits,
         // so need to take that into account
         // todo does DMM provide combination that this will overfill?
-        pPkg->asciiAndTailLong->exponent = 3 - pPkg->asciiAndTailLong->exponent; // milli's exponent is 3
+        pPkg->asciiAndTailLong.exponent = 3 - pPkg->asciiAndTailLong.exponent; // milli's exponent is 3
         _set_exponent_negative(pPkg);
     }
     // test for u symbol
     if (0 != RAW_BIT(chByte, 6)) {
         // in this protocol need to change the exponent. Exponent already has been set when parsing digits,
         // so need to take that into account
-        pPkg->asciiAndTailLong->exponent = 6 - pPkg->asciiAndTailLong->exponent; // micro's exponent is 6
+        pPkg->asciiAndTailLong.exponent = 6 - pPkg->asciiAndTailLong.exponent; // micro's exponent is 6
         _set_exponent_negative(pPkg);
     }
     // test for V symbol
@@ -370,13 +381,13 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
     if (0 != RAW_BIT(chByte, 2)) {
         // in this protocol need to change the exponent. Exponent already has been set when parsing digits,
         // so need to take that into account
-        pPkg->asciiAndTailLong->exponent += 3; // kilo's exponent is 3
+        pPkg->asciiAndTailLong.exponent += 3; // kilo's exponent is 3
     }
     // test for M symbol
     if (0 != RAW_BIT(chByte, 3)) {
         // in this protocol need to change the exponent. Exponent already has been set when parsing digits,
         // so need to take that into account
-        pPkg->asciiAndTailLong->exponent += 6; // mega's exponent is 6
+        pPkg->asciiAndTailLong.exponent += 6; // mega's exponent is 6
     }
 
     // skipping bit: 5,6 and 4 MIN is not supported by this protocol
@@ -389,13 +400,13 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
 
     // Store packet length depending on type of packet
     if (false == isOverLimit) {
-        pPkg->header->dataLen = BM_NORMAL_PACKET_DATA_LENGTH;
+        pPkg->header.dataLen = BM_NORMAL_PACKET_DATA_LENGTH;
     } else {
         // Over Limit detected -> sending short packet
-        pPkg->header->dataLen = BM_OL_PACKET_DATA_LENGTH;
+        pPkg->header.dataLen = BM_OL_PACKET_DATA_LENGTH;
         // Also need to fill appropriate data fields in Over Limit packet
-        pPkg->asciiAndTailShort->oChar = DIGIT_O;
-        pPkg->asciiAndTailShort->lChar = DIGIT_L;
+        pPkg->asciiAndTailShort.oChar = DIGIT_O;
+        pPkg->asciiAndTailShort.lChar = DIGIT_L;
     }
 
 
@@ -480,7 +491,7 @@ static void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
 
 
 
-static uint8_t convert_digit_segs_to_val(uint8_t segments) {
+STATIC uint8_t convert_digit_segs_to_val(uint8_t segments) {
     //    BIT meaning
     //    0   must be set to 0
     //    1   E-segment of 1st digit
@@ -539,6 +550,11 @@ static uint8_t convert_digit_segs_to_val(uint8_t segments) {
     return retVal;
 }
 
-static inline void _set_exponent_negative(data_resp_pkt* const pPkg) {
-    pPkg->asciiAndTailLong->exponentSign = BM_EXPONENT_MINUS_CHAR;
+STATIC INLINE void _set_exponent_negative(data_resp_pkt* const pPkt) {
+    pPkt->asciiAndTailLong.exponentSign = BM_EXPONENT_MINUS_CHAR;
+}
+
+
+STATIC int exampleFunc(void) {
+    return 1;
 }

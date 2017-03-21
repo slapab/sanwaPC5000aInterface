@@ -1,6 +1,8 @@
 #ifndef BM_DMM_PROTOCOL_H_
 #define BM_DMM_PROTOCOL_H_
 
+#include <stdint.h>
+
 /// Data length inside packet which stores actual reading
 #define BM_NORMAL_PACKET_DATA_LENGTH 15
 /// Data length inside packet which stores Over Limit indication
