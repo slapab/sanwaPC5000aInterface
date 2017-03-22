@@ -55,12 +55,12 @@
 
 STATIC INLINE void bm_fill_pkt_constants(data_resp_pkt* const pRespPack);
 STATIC INLINE void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack);
-STATIC void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg);
+STATIC void convert_sanwa_ir_data_to_bm_pkt(const uint8_t* const pRawData, data_resp_pkt* const pPkg);
 STATIC uint8_t convert_digit_segs_to_val(uint8_t segments);
 
 STATIC INLINE void _set_exponent_negative(data_resp_pkt* const pPkt);
 
-bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkt* const pDestPkg) {
+bm_result bm_create_pkt(const uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkt* const pDestPkg) {
     bm_result retVal = BM_ERROR;
 
     if (NULL != pRawData && NULL != pDestPkg) {
@@ -69,10 +69,10 @@ bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_
             memset((void*)pDestPkg->func, 0, sizeof(pDestPkg->func));
             // convert from raw data:
             convert_sanwa_ir_data_to_bm_pkt(pRawData, pDestPkg);
-            // calculate the check sum
-            bm_calculate_pkt_check_sum(pDestPkg);
             // fill constant values in the package
             bm_fill_pkt_constants(pDestPkg);
+            // calculate the check sum
+            bm_calculate_pkt_check_sum(pDestPkg);
             retVal = BM_PKG_CREATED;
         } else {
             retVal = BM_RAW_DATA_LEN_TOO_SHORT;
@@ -123,7 +123,7 @@ STATIC INLINE void bm_fill_pkt_constants(data_resp_pkt* const pRespPack) {
 }
 
 
-STATIC void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_pkt* const pPkg) {
+STATIC void convert_sanwa_ir_data_to_bm_pkt(const uint8_t* const pRawData, data_resp_pkt* const pPkg) {
     bool isOverLimit = false;
     uint8_t chByte = 0;
     uint8_t digit = DIGIT_EMPTY;
@@ -332,11 +332,11 @@ STATIC void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         _set_exponent_negative(pPkg);
     }
     // test for A symbol
-    if (0 != RAW_BIT(chByte, 1)) {
+    if (0 != RAW_BIT(chByte, 3)) {
         pPkg->func[1] |= BM_PROTO_SYM_A;
     }
     // test for dB symbol
-    if (0 != RAW_BIT(chByte, 1)) {
+    if (0 != RAW_BIT(chByte, 4)) {
         pPkg->func[1] |= BM_PROTO_SYM_dB;
     }
     // test for m symbol
@@ -355,7 +355,7 @@ STATIC void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
         _set_exponent_negative(pPkg);
     }
     // test for V symbol
-    if (0 != RAW_BIT(chByte, 1)) {
+    if (0 != RAW_BIT(chByte, 7)) {
         pPkg->func[0] |= BM_PROTO_SYM_V;
     }
 
@@ -404,6 +404,8 @@ STATIC void convert_sanwa_ir_data_to_bm_pkt(uint8_t* const pRawData, data_resp_p
     // Store packet length depending on type of packet
     if (false == isOverLimit) {
         pPkg->header.dataLen = BM_NORMAL_PACKET_DATA_LENGTH;
+        // need to convert exponent value from numerical to ASCII
+        pPkg->asciiAndTailLong.exponent += 0x30;
     } else {
         // Over Limit detected -> sending short packet
         pPkg->header.dataLen = BM_OL_PACKET_DATA_LENGTH;
@@ -555,9 +557,4 @@ STATIC uint8_t convert_digit_segs_to_val(uint8_t segments) {
 
 STATIC INLINE void _set_exponent_negative(data_resp_pkt* const pPkt) {
     pPkt->asciiAndTailLong.exponentSign = BM_EXPONENT_MINUS_CHAR;
-}
-
-
-STATIC int exampleFunc(void) {
-    return 1;
 }

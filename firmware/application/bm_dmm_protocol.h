@@ -69,6 +69,6 @@ typedef enum {
 /**
  * Converts raw data to UART package and returns pointer to converted
  */
-bm_result bm_create_pkt(uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkt* const pDestPkg);
+bm_result bm_create_pkt(const uint8_t* const pRawData, const uint8_t rawDataLen, data_resp_pkt* const pDestPkg);
 
 #endif // BM_DMM_PROTOCOL_H_
