@@ -27,6 +27,8 @@
 
 /// Supported commands:
 #define BM_DATA_REQ_COMMAND 0x00
+#define BM_DATA_RESP_COMMAND BM_DATA_REQ_COMMAND // value of 'command' field when sending measurements
+#define BM_DATA_RESP_OV_COMMAND 0x01             // value of 'command' field when sending OverLimit packet
 
 /// Sanwa PC5000A IR protocol length in bytes
 #define SANWA_DATA_LEN 16
@@ -86,7 +88,7 @@ STATIC INLINE void bm_calculate_pkt_check_sum(data_resp_pkt* const pRespPack) {
         uint8_t chkSum = pRespPack->func[0];
 
         uint8_t* pBytes = &pRespPack->func[1];
-        for (int i = 1; i < pRespPack->header.dataLen - 1; ++i) {
+        for (int i = 1; i < pRespPack->header.dataLen; ++i) {
             chkSum ^= *pBytes;
             ++pBytes;
         }
@@ -105,14 +107,15 @@ STATIC INLINE void bm_fill_pkt_constants(data_resp_pkt* const pRespPack) {
     if (NULL != pRespPack) {
         pRespPack->header.dle = BM_DLE_CONST;
         pRespPack->header.stx = BM_STX_CONST;
-        pRespPack->header.cmd = BM_DATA_REQ_COMMAND;
 
         if (BM_NORMAL_PACKET_DATA_LENGTH == pRespPack->header.dataLen) {
+            pRespPack->header.cmd = BM_DATA_RESP_COMMAND;
             pRespPack->asciiAndTailLong.pktTail.etx = BM_ETX_CONST;
             pRespPack->asciiAndTailLong.pktTail.dle = BM_DLE_CONST;
             pRespPack->asciiAndTailLong.constDotChar = BM_DOT_CHAR_CONST;
             pRespPack->asciiAndTailLong.constEChar = BM_EXPONENT_CHAR_CONST;
         } else {
+            pRespPack->header.cmd = BM_DATA_RESP_OV_COMMAND;
             pRespPack->asciiAndTailShort.pktTail.etx = BM_ETX_CONST;
             pRespPack->asciiAndTailShort.pktTail.dle = BM_DLE_CONST;
         }
