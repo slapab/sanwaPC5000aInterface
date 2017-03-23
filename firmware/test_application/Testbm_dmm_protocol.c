@@ -1,5 +1,5 @@
 #include "bm_dmm_protocol.h"
-#include "bm_protocol_bits_descr.h"
+#include "bm_protocol_defs.h"
 #include "unity.h"
 #include <string.h> //memset
 

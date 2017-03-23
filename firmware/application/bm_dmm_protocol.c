@@ -1,10 +1,9 @@
 #include "bm_dmm_protocol.h"
-#include "bm_protocol_bits_descr.h"
-
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
+#include "bm_protocol_defs.h"
 
 #ifndef TEST
 #define STATIC static
@@ -17,18 +16,10 @@
 
 
 /// Constants used in protocol packets
-#define BM_DLE_CONST 0x10
-#define BM_STX_CONST 0x02
-#define BM_ETX_CONST 0x03
 #define BM_DOT_CHAR_CONST 0x2E
 #define BM_EXPONENT_CHAR_CONST 0x45
 #define BM_EXPONENT_PLUS_CHAR 0x2B
 #define BM_EXPONENT_MINUS_CHAR 0x2D
-
-/// Supported commands:
-#define BM_DATA_REQ_COMMAND 0x00
-#define BM_DATA_RESP_COMMAND BM_DATA_REQ_COMMAND // value of 'command' field when sending measurements
-#define BM_DATA_RESP_OV_COMMAND 0x01             // value of 'command' field when sending OverLimit packet
 
 /// Sanwa PC5000A IR protocol length in bytes
 #define SANWA_DATA_LEN 16
