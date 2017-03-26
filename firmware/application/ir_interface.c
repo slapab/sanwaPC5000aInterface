@@ -20,6 +20,7 @@ void ir_itf_init(void) {
 bool ir_itf_read_blocking(uint8_t* const buffer, const size_t len) {
     bool retval = false;
 
+    if ((NULL != buffer) && (len >= IR_DATA_LEN)) {
     do {
         // preconditions -> IR receiver must giving at this moment '0'
         if (0 != gpio_get(GPIO_PORT, GPIO_DATA_IN)) {
@@ -36,20 +37,29 @@ bool ir_itf_read_blocking(uint8_t* const buffer, const size_t len) {
         // wait for '1' from dmm but not more than 200ms
         systick_t tpStart = st_get_ticks();
         while(0 == gpio_get(GPIO_PORT, GPIO_DATA_IN) && st_get_time_duration(tpStart) <= 200/*ms*/) {;}
-        // check if DMM send response
+        // check if DMM send response not timeout
         if (0 == gpio_get(GPIO_PORT, GPIO_DATA_IN)) {
             break;
         }
 
         // start generating 128 impulses on data clock and read data on falling edge
-        for (int i = 0; i < 128; ++i) {
-            gpio_set(GPIO_PORT, GPIO_DATA_CLK);
-            nops_wait();
-            gpio_clear(GPIO_PORT, GPIO_DATA_CLK);
-            // read
+        for (int byteNo = 0; byteNo < IR_DATA_LEN; ++byteNo) {
+            for (int bitNo = 0; bitNo < 8; ++bitNo) {
+                gpio_set(GPIO_PORT, GPIO_DATA_CLK);
+                nops_wait();
+
+                gpio_clear(GPIO_PORT, GPIO_DATA_CLK);
+                uint16_t bitVal = gpio_get(GPIO_PORT, GPIO_DATA_IN); // 0 or 1
+                // insert just read bit into right place of buffer
+                // this is branching less replacement for: if(bitVal == 1) buffer[byteNo] |= (1<<bitNo); else buffer[byteNo] &= ~(1<<bitNo);
+                buffer[byteNo] ^= (-bitVal ^ buffer[byteNo]) & (1 << bitNo);
+
+                nops_wait();
+            }
         }
 
     } while (0);
+    } // checking function args
 
     return retval;
 }

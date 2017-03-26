@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/// Length of buffer (in bytes) required to store data read with IR interface
+#define IR_DATA_LEN 16
 
 /**
  * Initializes I/O
