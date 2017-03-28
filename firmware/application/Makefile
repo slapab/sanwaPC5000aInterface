@@ -19,7 +19,12 @@
 
 BINARY = app_binary
 
-SRCS += main.c
+SRCS += main.c \
+		usb_cdc_dev.c \
+		bm_dmm_protocol.c \
+		check_data_req.c \
+		ir_interface.c \
+		systick_local.c
 
 OBJS += $(SRCS:.c=.o)
 
