@@ -1,0 +1,14 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP LL-S350PTC-1A
+D Phototransistor NPN, 2-pin (C=2, E=1), dmax = 940nm, 60° 1206
+K npn phototransistor IR LL-S350PTC-1A
+$ENDCMP
+#
+$CMP USBLC6-2
+D Very low capacitance ESD protection
+K ESD USB HIGH Speed
+F http://www.st.com/content/ccc/resource/technical/document/datasheet/06/1d/48/9c/6c/20/4a/b2/CD00050750.pdf/files/CD00050750.pdf/jcr:content/translations/en.CD00050750.pdf
+$ENDCMP
+#
+#End Doc Library
