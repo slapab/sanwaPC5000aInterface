@@ -24,7 +24,8 @@ SRCS += main.c \
 		bm_dmm_protocol.c \
 		check_data_req.c \
 		ir_interface.c \
-		systick_local.c
+		systick_local.c \
+		bsp.c
 
 OBJS += $(SRCS:.c=.o)
 

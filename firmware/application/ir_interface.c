@@ -12,10 +12,13 @@ static void nops_wait(void);
 void ir_itf_init(void) {
     rcc_periph_clock_enable(RCC_GPIOB);
 
-    gpio_set_mode(GPIO_PORT, GPIO_MODE_INPUT, 0, GPIO_DATA_IN);
-    gpio_set_mode(GPIO_PORT, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO_DATA_CLK);
+    // configure input pin, assume external pull-down or pull-up
+    gpio_set_mode(GPIO_PORT, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, GPIO_DATA_IN);
+    // configure clk pin
+    gpio_set_mode(GPIO_PORT, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO_DATA_CLK);
     gpio_clear(GPIO_PORT, GPIO_DATA_CLK);
 }
+
 
 bool ir_itf_read_blocking(uint8_t* const buffer, const size_t len) {
     bool retval = false;
@@ -31,7 +34,7 @@ bool ir_itf_read_blocking(uint8_t* const buffer, const size_t len) {
         gpio_clear(GPIO_PORT, GPIO_DATA_CLK);
         asm("nop"); asm("nop"); asm("nop");
         gpio_set(GPIO_PORT, GPIO_DATA_CLK);
-        st_delay_ms(10);
+        st_delay_ms(11);
         gpio_clear(GPIO_PORT, GPIO_DATA_CLK);
 
         // wait for '1' from dmm but not more than 200ms
@@ -46,7 +49,8 @@ bool ir_itf_read_blocking(uint8_t* const buffer, const size_t len) {
         for (int byteNo = 0; byteNo < IR_DATA_LEN; ++byteNo) {
             for (int bitNo = 0; bitNo < 8; ++bitNo) {
                 gpio_set(GPIO_PORT, GPIO_DATA_CLK);
-                nops_wait();
+                //nops_wait();nops_wait();nops_wait();nops_wait();
+                st_delay_ms(1);
 
                 gpio_clear(GPIO_PORT, GPIO_DATA_CLK);
                 uint16_t bitVal = gpio_get(GPIO_PORT, GPIO_DATA_IN); // 0 or 1
@@ -54,10 +58,11 @@ bool ir_itf_read_blocking(uint8_t* const buffer, const size_t len) {
                 // this is branching less replacement for: if(bitVal == 1) buffer[byteNo] |= (1<<bitNo); else buffer[byteNo] &= ~(1<<bitNo);
                 buffer[byteNo] ^= (-bitVal ^ buffer[byteNo]) & (1 << bitNo);
 
-                nops_wait();
+//                nops_wait();nops_wait();nops_wait();nops_wait();
+                st_delay_ms(1);
             }
         }
-
+        retval = true;
     } while (0);
     } // checking function args
 

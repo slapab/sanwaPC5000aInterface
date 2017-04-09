@@ -27,6 +27,9 @@
 
 #include "usb_cdc_dev.h"
 #include "systick_local.h"
+#include "bsp.h"
+#include "ir_interface.h"
+#include "bm_dmm_protocol.h"
 
 
 int main(void) {
@@ -38,18 +41,19 @@ int main(void) {
 
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_AFIO);
-    rcc_periph_clock_enable(RCC_GPIOC);
 
     AFIO_MAPR |= AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON;
 
-    gpio_set_mode(GPIOA, GPIO_MODE_INPUT, 0, GPIO15);
-    gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO13); //led
+    // init board specific hardware
+    bsp_init();
 
-    gpio_set(GPIOA, GPIO15);
-    gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
-              GPIO_CNF_OUTPUT_PUSHPULL, GPIO15);
+    // init ir interface
+    ir_itf_init();
+    uint8_t ir_raw_data_buff[16] = {0};
+    data_resp_pkt bm_data = {0};
 
-    gpio_clear(GPIOC, GPIO13);// led on
+    // LED on
+    bsp_set_led_state(true);
 
     usbd_dev = usb_cdc_init();
 
@@ -57,11 +61,23 @@ int main(void) {
     while (1) {
         usbd_poll(usbd_dev);
 
-        if ((systick_t)(st_get_ticks() - startPoint) >= 100) {
-            gpio_toggle(GPIOC, GPIO13);
+//        if ((systick_t)(st_get_ticks() - startPoint) >= 100) {
+//            bsp_led_toggle();
+//
+//            startPoint = st_get_ticks();
+//        }
 
-            startPoint = st_get_ticks();
-        }
+        // testing ir_interface
+//        if (true == ir_itf_read_blocking(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]))) {
+//            if (BM_PKG_CREATED == bm_create_pkt(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]), &bm_data)) {
+//                if ((systick_t)(st_get_ticks() - startPoint) >= 100) {
+//                                    bsp_led_toggle();
+//
+//                                    startPoint = st_get_ticks();
+//                }
+//            }
+//        }
+
     }
 
     return 0;

@@ -3,10 +3,14 @@
 #include "systick_local.h"
 
 
-static systick_t counter;
+static volatile systick_t counter;
+static volatile systick_t delay_ms_cnt;
 
 void sys_tick_handler(void) {
     ++counter;
+    if (delay_ms_cnt > 0) {
+        --delay_ms_cnt;
+    }
 }
 
 bool st_init(const uint32_t systick_freq, const uint32_t ahb_freq) {
@@ -26,5 +30,6 @@ uint32_t st_get_time_duration(const systick_t start_time_point) {
 }
 
 void st_delay_ms(uint32_t delay) {
-    while (delay--) {;}
+    delay_ms_cnt = delay;
+    while (delay_ms_cnt > 0) {;}
 }
