@@ -31,6 +31,15 @@
 #define CMD_SETADDR 0x21
 #define CMD_ERASE   0x41
 
+/// Port to which user button is connected to
+#define USER_BT_PORT GPIOB
+/// Pin to which user button is connected to
+#define USER_BT_PIN GPIO5
+// Port to which user LED is connected to
+#define USER_LED_PORT GPIOB
+// Pin to which user LED is connected to
+#define USER_LED_PIN GPIO6
+
 /* We need a special large control buffer for this device: */
 uint8_t usbd_control_buffer[1024];
 
@@ -265,8 +274,10 @@ int main(void)
     }
 
     rcc_periph_clock_enable(RCC_GPIOB);
+    gpio_set_mode(USER_BT_PORT, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, USER_BT_PIN);
+    gpio_set_mode(USER_LED_PORT, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, USER_LED_PIN);
 
-    if (!gpio_get(GPIOB, GPIO11)) {
+    if (0 == (gpio_get(USER_BT_PORT, USER_BT_PIN) & USER_BT_PIN)) {
         /* Boot the application if it's valid. */
         if ((*(volatile uint32_t *)APP_ADDRESS & 0x2FFE0000) == 0x20000000) {
             /* Set vector table base address. */
@@ -281,16 +292,12 @@ int main(void)
 
     rcc_clock_setup_in_hsi_out_48mhz();
 
-    rcc_periph_clock_enable(RCC_GPIOC);
-
-    gpio_set_mode(GPIOC, GPIO_MODE_OUTPUT_2_MHZ,
-              GPIO_CNF_OUTPUT_PUSHPULL, GPIO13);
-    gpio_set(GPIOC, GPIO13); // led off
+    gpio_set(USER_LED_PORT, USER_LED_PIN); // user led off
 
     usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev, &config, usb_strings, 4, usbd_control_buffer, sizeof(usbd_control_buffer));
     usbd_register_set_config_callback(usbd_dev, usbdfu_set_config);
 
-    gpio_clear(GPIOC, GPIO13); // led on
+    gpio_clear(USER_LED_PORT, USER_LED_PIN); // led on
 
     uint32_t d = 0;
     while (1) {
@@ -299,7 +306,7 @@ int main(void)
         ++d;
         if (d >= 480000) {
             d = 0;
-            gpio_toggle(GPIOC, GPIO13);
+            gpio_toggle(USER_LED_PORT, USER_LED_PIN);
         }
     }
 }
