@@ -58,6 +58,13 @@ int main(void) {
     usbd_dev = usb_cdc_init();
 
     systick_t startPoint = st_get_ticks();
+
+    // allow USB to submit on host OS
+    while ((systick_t)(st_get_ticks() - startPoint) <= 2000) {
+        usbd_poll(usbd_dev);
+    }
+
+    startPoint = st_get_ticks();
     while (1) {
         usbd_poll(usbd_dev);
 
@@ -68,15 +75,15 @@ int main(void) {
 //        }
 
         // testing ir_interface
-//        if (true == ir_itf_read_blocking(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]))) {
-//            if (BM_PKG_CREATED == bm_create_pkt(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]), &bm_data)) {
-//                if ((systick_t)(st_get_ticks() - startPoint) >= 100) {
-//                                    bsp_led_toggle();
-//
-//                                    startPoint = st_get_ticks();
-//                }
-//            }
-//        }
+        if (true == ir_itf_read_blocking(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]))) {
+            if (BM_PKG_CREATED == bm_create_pkt(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]), &bm_data)) {
+                if ((systick_t)(st_get_ticks() - startPoint) >= 100) {
+                                    bsp_led_toggle();
+
+                                    startPoint = st_get_ticks();
+                }
+            }
+        }
 
     }
 
