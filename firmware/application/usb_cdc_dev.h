@@ -10,6 +10,6 @@
 
 usbd_device* usb_cdc_init(void);
 
-bool usb_cdc_register_data_in_callback(usbd_device* usbd_dev, usbd_endpoint_callback callback);
+bool usb_cdc_register_data_in_callback(usbd_endpoint_callback callback);
 
 #endif //USB_CDC_DEV_H_

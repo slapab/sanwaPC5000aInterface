@@ -11,7 +11,7 @@
 /**
  * Initializes I/O
  */
-void ir_itf_init(void);
+void ir_itf_init_blocking(void);
 
 /**
  * Reads data from DMM - this is blocking operation.
@@ -22,6 +22,14 @@ void ir_itf_init(void);
  */
 bool ir_itf_read_blocking(uint8_t* const buffer, const size_t len);
 
+
+/// todo comment
+void ir_itf_init_nb(void);
+
+/// todo comment
+void ir_itf_start_read_nb(uint8_t* const buffer, const size_t len);
+
+int ir_itf_get_status(void);
 /**
  * Starts reading data from DMM - this is non blocking blocking operations. It will use SPI peripheral and DMA to
  * perform ...

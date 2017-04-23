@@ -154,6 +154,10 @@ static const char *usb_strings[] = {
 /* Buffer to be used for control requests. */
 uint8_t usbd_control_buffer[128];
 
+static void internal_cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep);
+static usbd_endpoint_callback rxCallBack = internal_cdcacm_data_rx_cb;
+
+
 static int cdcacm_control_request(usbd_device *usbd_dev, struct usb_setup_data *req, uint8_t **buf,
         uint16_t *len, void (**complete)(usbd_device *usbd_dev, struct usb_setup_data *req)) {
     (void)complete;
@@ -206,7 +210,7 @@ static void internal_cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep) {
 static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue) {
     (void)wValue;
 
-    usbd_ep_setup(usbd_dev, CDC_DATA_IN_EP, USB_ENDPOINT_ATTR_BULK, 64, internal_cdcacm_data_rx_cb);
+    usbd_ep_setup(usbd_dev, CDC_DATA_IN_EP, USB_ENDPOINT_ATTR_BULK, 64, rxCallBack);
     usbd_ep_setup(usbd_dev, CDC_DATA_OUT_EP, USB_ENDPOINT_ATTR_BULK, 64, NULL);
     usbd_ep_setup(usbd_dev, CDC_COMM_EP, USB_ENDPOINT_ATTR_INTERRUPT, 16, NULL);
 
@@ -228,10 +232,10 @@ usbd_device* usb_cdc_init(void) {
     return usbd_dev;
 }
 
-bool usb_cdc_register_data_in_callback(usbd_device* usbd_dev, usbd_endpoint_callback callback) {
+bool usb_cdc_register_data_in_callback(usbd_endpoint_callback callback) {
     bool retval = false;
-    if (NULL != callback && NULL != usbd_dev) {
-        usbd_ep_setup(usbd_dev, CDC_DATA_IN_EP, USB_ENDPOINT_ATTR_BULK, 64, callback);
+    if (NULL != callback) {
+        rxCallBack = callback;
         retval = true;
     }
     return retval;
