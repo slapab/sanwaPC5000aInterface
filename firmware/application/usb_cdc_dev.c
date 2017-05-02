@@ -12,7 +12,7 @@ static const struct usb_device_descriptor dev = {
     .bDeviceClass = USB_CLASS_CDC,
     .bDeviceSubClass = 0,
     .bDeviceProtocol = 0,
-    .bMaxPacketSize0 = 64,
+    .bMaxPacketSize0 = CDC_DATA_BUFFER_LEN,
     .idVendor = 0x0483,
     .idProduct = 0x5740,
     .bcdDevice = 0x0200,
@@ -42,14 +42,14 @@ static const struct usb_endpoint_descriptor data_endp[] = {{
     .bDescriptorType = USB_DT_ENDPOINT,
     .bEndpointAddress = CDC_DATA_IN_EP,
     .bmAttributes = USB_ENDPOINT_ATTR_BULK,
-    .wMaxPacketSize = 64,
+    .wMaxPacketSize = CDC_DATA_BUFFER_LEN,
     .bInterval = 1,
 }, {
     .bLength = USB_DT_ENDPOINT_SIZE,
     .bDescriptorType = USB_DT_ENDPOINT,
     .bEndpointAddress = CDC_DATA_OUT_EP,
     .bmAttributes = USB_ENDPOINT_ATTR_BULK,
-    .wMaxPacketSize = 64,
+    .wMaxPacketSize = CDC_DATA_BUFFER_LEN,
     .bInterval = 1,
 }};
 
@@ -198,8 +198,8 @@ static int cdcacm_control_request(usbd_device *usbd_dev, struct usb_setup_data *
 static void internal_cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep) {
     (void)ep;
 
-    char buf[64];
-    int len = usbd_ep_read_packet(usbd_dev, CDC_DATA_IN_EP, buf, 64);
+    char buf[CDC_DATA_BUFFER_LEN];
+    int len = usbd_ep_read_packet(usbd_dev, CDC_DATA_IN_EP, buf, CDC_DATA_BUFFER_LEN);
 
     if (len) {
         buf[len] = 0;
@@ -210,8 +210,8 @@ static void internal_cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep) {
 static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue) {
     (void)wValue;
 
-    usbd_ep_setup(usbd_dev, CDC_DATA_IN_EP, USB_ENDPOINT_ATTR_BULK, 64, rxCallBack);
-    usbd_ep_setup(usbd_dev, CDC_DATA_OUT_EP, USB_ENDPOINT_ATTR_BULK, 64, NULL);
+    usbd_ep_setup(usbd_dev, CDC_DATA_IN_EP, USB_ENDPOINT_ATTR_BULK, CDC_DATA_BUFFER_LEN, rxCallBack);
+    usbd_ep_setup(usbd_dev, CDC_DATA_OUT_EP, USB_ENDPOINT_ATTR_BULK, CDC_DATA_BUFFER_LEN, NULL);
     usbd_ep_setup(usbd_dev, CDC_COMM_EP, USB_ENDPOINT_ATTR_INTERRUPT, 16, NULL);
 
     usbd_register_control_callback(

@@ -4,6 +4,7 @@
 #include <libopencm3/usb/usbd.h>
 #include <stdbool.h>
 
+#define CDC_DATA_BUFFER_LEN 64
 #define CDC_DATA_OUT_EP 0x82
 #define CDC_DATA_IN_EP 0x01
 #define CDC_COMM_EP 0x83
