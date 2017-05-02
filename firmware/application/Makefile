@@ -17,6 +17,24 @@
 ## along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
+###############################################################################
+## Defines possible hardware and software versions
+###############################################################################
+INTERFACE_VER1 := 1# Sources created for first working hardware
+INTERFACE_VER2 := 2# Sources created for second version of hwardware 
+###############################################################################
+
+## assign required version for compilation if not defined
+ifndef USING_INTERFACE_VER
+USING_INTERFACE_VER := $(INTERFACE_VER1)
+endif
+
+## pass macro USING_INTERFACE_VER and also all possible version to the preprocessor
+DEFS += -DUSING_INTERFACE_VER=$(USING_INTERFACE_VER) \
+		-DINTERFACE_VER1=$(INTERFACE_VER1) \
+		-DINTERFACE_VER2=$(INTERFACE_VER2) 
+###############################################################################
+
 BINARY = app_binary
 
 SRCS += main.c \
@@ -33,6 +51,14 @@ CSTD = -std=gnu99
 
 OPENCM3_DIR=../libopencm3
 LDSCRIPT = ./stm32f103c8t6_app.ld
+
+
+## Version correctness checking
+ifeq (,$(filter $(INTERFACE_VER1) $(INTERFACE_VER2), $(USING_INTERFACE_VER)))
+$(error Assigned unsupported version = "$(USING_INTERFACE_VER)"!)
+else
+$(info Using version: "$(USING_INTERFACE_VER)")
+endif
 
 include ./libopencm3.target.mk
 
