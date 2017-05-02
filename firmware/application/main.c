@@ -33,8 +33,7 @@
 #include "bm_dmm_protocol.h"
 #include "check_data_req.h"
 
-//#define FAKE_RESPONSE 1
-
+#define FAKE_RESPONSE 0
 #if 1 == FAKE_RESPONSE
 // AC 13.722V
 static const data_resp_pkt example_voltageReading1 = {
@@ -49,15 +48,17 @@ static const data_resp_pkt example_voltageReading1 = {
 #endif
 
 
-int dataRequestNo;
+/// Number of data requests received from host
+static int dataRequestNo = 0;
 
+/// Callback function called when received some data by USB-CDC protocol
 static void cdcacm_rx_callback(usbd_device *usbd_dev, uint8_t ep) {
     (void)ep;
-    enum {BUFF_SIZE = 64};
-    static uint8_t buff[BUFF_SIZE] = {0};
+
+    static uint8_t buff[CDC_DATA_BUFFER_LEN] = {0};
 
     // read received bytes from usb buffer
-    int len = usbd_ep_read_packet(usbd_dev, CDC_DATA_IN_EP, buff, BUFF_SIZE);
+    int len = usbd_ep_read_packet(usbd_dev, CDC_DATA_IN_EP, buff, CDC_DATA_BUFFER_LEN);
 
     // check received bytes for 'dmm-data' request
     if (len > 0) {
@@ -65,13 +66,12 @@ static void cdcacm_rx_callback(usbd_device *usbd_dev, uint8_t ep) {
     }
 }
 
+
+
 int main(void) {
-
-    char txBuff[64] = {0};
-
     usbd_device* usbd_dev = NULL;
-    rcc_clock_setup_in_hsi_out_48mhz();
 
+    rcc_clock_setup_in_hsi_out_48mhz();
     // Configures and start SysTick
     st_init(1000, 48000000);
 
@@ -84,10 +84,9 @@ int main(void) {
     bsp_init();
 
     // init ir interface
-//    ir_itf_init_blocking();
     ir_itf_init_nb();
 
-    uint8_t ir_raw_data_buff[16] = {0};
+    uint8_t ir_raw_data_buff[IR_DATA_BYTES] = {0};
     data_resp_pkt bm_data = {0};
 
     // LED on
@@ -111,45 +110,44 @@ int main(void) {
     while (1) {
         usbd_poll(usbd_dev);
 
-        int status = ir_itf_get_status();
+        switch(ir_itf_get_status()) {
+        case IR_ITF_READY:
+            if (dataRequestNo > 0) {
+                --dataRequestNo;
 
-        if (2 == status) {
-            usbd_ep_write_packet(usbd_dev, CDC_DATA_OUT_EP, (void*)ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]));
-        }
+    #if 1 == FAKE_RESPONSE
 
-        if (dataRequestNo > 0) {
-            --dataRequestNo;
+                // simulate data acquisition
+                if ((systick_t)(st_get_ticks() - startPoint) >= 350) {
 
-#if 1 == FAKE_RESPONSE
+                    usbd_ep_write_packet(usbd_dev, CDC_DATA_OUT_EP, (void*)&example_voltageReading1, sizeof(data_resp_pkt));
+                    startPoint = st_get_ticks();
+                }
+    #else
+                memset((void*)ir_raw_data_buff, 0, IR_DATA_BYTES);
+                ir_itf_start_read_nb(ir_raw_data_buff, IR_DATA_BYTES);
+    #endif
 
-            // simulate data acquisition
-            if ((systick_t)(st_get_ticks() - startPoint) >= 350) {
-
-                usbd_ep_write_packet(usbd_dev, CDC_DATA_OUT_EP, (void*)&example_voltageReading1, sizeof(data_resp_pkt));
-                startPoint = st_get_ticks();
             }
-#else
-//            // send text response
-//            const char* staticStr = "Received dm-data request\n";
-//            strncpy(txBuff, staticStr, strlen(staticStr));
-//            txBuff[strlen(staticStr)] = '\0';
-//            usbd_ep_write_packet(usbd_dev, CDC_DATA_OUT_EP, txBuff, strlen(staticStr));
-            if (0 == status) {
-                memset((void*)ir_raw_data_buff, 0, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]));
-                ir_itf_start_read_nb(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]));
+        break;
+        case IR_ITF_DONE: {
+#if INTERFACE_VER1 == USING_INTERFACE_VER
+            // Inverse bits in raw data -> DMM transmits '0' when turns its IR LED on. So with this version of hardware
+            // read bit of value '1' is in fact bit of value '0'.
+            for (int i = 0; i < IR_DATA_BYTES; ++i) {
+                ir_raw_data_buff[i] = ~ir_raw_data_buff[i];
             }
 #endif
-//            // testing ir_interface
-//            if (true == ir_itf_read_blocking(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]))) {
-//                if (BM_PKG_CREATED == bm_create_pkt(ir_raw_data_buff, sizeof(ir_raw_data_buff)/sizeof(ir_raw_data_buff[0]), &bm_data)) {
-//                    if ((systick_t)(st_get_ticks() - startPoint) >= 100) {
-//                        bsp_led_toggle();
-//
-//                        startPoint = st_get_ticks();
-//                    }
-//                }
-//            }
-        }
+            // convert raw data to the brymen packet
+            if (BM_PKG_CREATED == bm_create_pkt(ir_raw_data_buff, IR_DATA_BYTES, &bm_data)) {
+                usbd_ep_write_packet(usbd_dev, CDC_DATA_OUT_EP, (void*)&bm_data, sizeof(bm_data));
+            }
+        } // end of case IR_ITF_DONE
+        break;
+        default: break;
+        } // end of switch
+
+
     }
 
     return 0;
