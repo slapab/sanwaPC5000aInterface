@@ -28,6 +28,7 @@
 
 #include "usb_cdc_dev.h"
 #include "systick_local.h"
+#include "soft_timer.h"
 #include "bsp.h"
 #include "ir_interface.h"
 #include "bm_dmm_protocol.h"
@@ -109,6 +110,7 @@ int main(void) {
     startPoint = st_get_ticks();
     while (1) {
         usbd_poll(usbd_dev);
+        soft_timer_poll();
 
         switch(ir_itf_get_status()) {
         case IR_ITF_READY:

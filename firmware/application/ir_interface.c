@@ -6,6 +6,7 @@
 #include <signal.h> //sig_atomic_t
 #include "ir_interface.h"
 #include "systick_local.h"
+#include "soft_timer.h"
 
 #if INTERFACE_VER1 == USING_INTERFACE_VER
 
@@ -83,6 +84,8 @@ static void configure_tim_oc(const uint32_t timer_peripheral, enum tim_oc_id oc_
 /// Configures exti to catch signal from the DMM when it is ready to transmit data.
 static void configure_exti_for_data_ready_signal(void);
 
+/// Function that is a callback for software timer and is called when //todo
+static void dmm_not_responding_soft_timer_callback(void);
 
 /// This variable points to the bit-band region which stores the value of current bit on 'data in' pin.
 static volatile uint32_t* dataInBit = NULL;
@@ -92,9 +95,12 @@ static volatile uint8_t bitNo = 0;
 static volatile uint8_t byteNo = 0;
 /// Points to the active buffer where receiving data are storing.
 static uint8_t* pActiveBuf = NULL;
-
-
+/// Describes the internal state when using non-blocking API.
 static volatile sig_atomic_t dmmCommState = IR_ITF_READY;
+/// Software timer that is using together with nonblocking API and acts as the timeout when waiting for reponse from
+/// the DMM.
+static soft_timer_descr softTimer;
+
 
 void ir_itf_init_blocking(void) {
     rcc_periph_clock_enable(RCC_GPIOB);
@@ -191,26 +197,30 @@ void ir_itf_start_read_nb(uint8_t* const buffer, const size_t len) {
         return;
     }
 
+    // starts single shot software timer to prevent hanging out when DMM didn't respond after request signal.
+    if (false == soft_timer_start_one_shot(&softTimer, 2000, dmm_not_responding_soft_timer_callback)) {
+        return;
+    }
 
     bitNo = 0;
     byteNo = 0;
     pActiveBuf = buffer;
 
-    dmmCommState = IR_ITF_WORKING;
+    dmmCommState = IR_ITF_WAITING_FOR_DMM;
     ir_itf_generate_start_pulse();
 }
 
 ir_itf_state_type ir_itf_get_status(void) {
-    ir_itf_state_type isWorking = IR_ITF_WORKING;
+    ir_itf_state_type retState = IR_ITF_WORKING;
 
     if (IR_ITF_DONE == dmmCommState) {
         dmmCommState = IR_ITF_READY;
-        isWorking = IR_ITF_DONE;
+        retState = IR_ITF_DONE;
     } else if (IR_ITF_READY == dmmCommState) {
-        isWorking = IR_ITF_READY;
+        retState = IR_ITF_READY;
     }
 
-    return isWorking;
+    return retState;
 }
 
 static void configure_tim_oc(const uint32_t timer_peripheral, enum tim_oc_id oc_channel,  const uint16_t ccr_value) {
@@ -313,6 +323,7 @@ __attribute__((interrupt)) void tim2_isr(void) {
  * Interrupt occurs when DMM indicates (by turning its IR LED on) when it is read to transmit data.
  */
 __attribute__((interrupt)) void exti4_isr(void) {
+    softTimer.terminating_req = 1; // request to abort the timer
     exti_reset_request(USED_EXTI_SOURCE);
     // disable exti
     exti_disable_request(USED_EXTI_SOURCE);
@@ -342,3 +353,21 @@ __attribute__((interrupt)) void exti4_isr(void) {
     // start counting
     timer_enable_counter(USED_TIMER_PERIPH);
 } // exti4_isr()
+
+static void dmm_not_responding_soft_timer_callback(void) {
+    if (IR_ITF_WAITING_FOR_DMM == dmmCommState) {
+        // timed out -> dmm didn't respond in requested time. Reset to ready state.
+        // - disable EXIT
+        nvic_disable_irq(USED_EXTI_NVIC_IRQ);
+        exti_reset_request(USED_EXTI_SOURCE);
+        exti_disable_request(USED_EXTI_SOURCE);
+        nvic_clear_pending_irq(USED_EXTI_NVIC_IRQ);
+
+        // - force LOW state on CLK pin and disable timer
+        timer_set_oc_mode(USED_TIMER_PERIPH, USED_TIMER_OC_CHANNEL, TIM_OCM_FORCE_LOW);
+        timer_disable_counter(USED_TIMER_PERIPH);
+
+        dmmCommState = IR_ITF_READY;
+    }
+}
+

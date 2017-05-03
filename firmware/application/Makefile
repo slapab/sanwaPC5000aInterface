@@ -43,6 +43,7 @@ SRCS += main.c \
 		check_data_req.c \
 		ir_interface.c \
 		systick_local.c \
+		soft_timer.c \
 		bsp.c
 
 OBJS += $(SRCS:.c=.o)

@@ -11,6 +11,7 @@
 
 typedef enum {
     IR_ITF_READY = 0,
+    IR_ITF_WAITING_FOR_DMM,
     IR_ITF_WORKING,
     IR_ITF_DONE
 } ir_itf_state_type;
