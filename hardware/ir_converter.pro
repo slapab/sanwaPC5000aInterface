@@ -1,4 +1,4 @@
-update=czw, 6 kwi 2017, 00:05:44
+update=pią, 26 maj 2017, 18:11:49
 version=1
 last_client=kicad
 [pcbnew]
@@ -23,8 +23,6 @@ ModuleOutlineThickness=0.150000000000
 [cvpcb]
 version=1
 NetIExt=net
-[general]
-version=1
 [eeschema]
 version=1
 LibDir=CustomLibraries
@@ -130,3 +128,5 @@ LibName98=contrib_symbols_dl1eic/Symbols_ICs-Opto_RevB_16Sep2013
 LibName99=contrib_symbols_dl1eic/Symbols_ICs-Diskrete_RevD10
 LibName100=contrib_symbols_dl1eic/Symbols_Socket-DIN41612_RevA
 LibName101=CustomLibraries/CustomLibraries
+[general]
+version=1
