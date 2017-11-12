@@ -249,9 +249,68 @@ static void usbdfu_set_config(usbd_device *usbd_dev, uint16_t wValue)
                 usbdfu_control_request);
 }
 
-int main(void)
+
+static void rcc_clock_setup_in_hse_8mhz_out_48mhz(void)
 {
-    usbd_device *usbd_dev;
+    /* Enable external high-speed oscillator 8MHz. */
+    rcc_osc_on(RCC_HSE);
+    rcc_wait_for_osc_ready(RCC_HSE);
+    rcc_set_sysclk_source(RCC_CFGR_SW_SYSCLKSEL_HSECLK);
+
+
+    /*
+     * Set prescalers for AHB, ADC, ABP1, ABP2.
+     * Do this before touching the PLL
+     */
+    rcc_set_hpre(RCC_CFGR_HPRE_SYSCLK_NODIV);   /*Set.48MHz Max.72MHz */
+    rcc_set_adcpre(RCC_CFGR_ADCPRE_PCLK2_DIV8); /*Set. 6MHz Max.14MHz */
+    rcc_set_ppre1(RCC_CFGR_PPRE1_HCLK_DIV2);    /*Set.24MHz Max.36MHz */
+    rcc_set_ppre2(RCC_CFGR_PPRE2_HCLK_NODIV);   /*Set.48MHz Max.72MHz */
+    rcc_set_usbpre(RCC_CFGR_USBPRE_PLL_CLK_NODIV);  /*Set.48MHz Max.48MHz */
+
+    /*
+     * Sysclk runs with 24MHz -> 0 waitstates.
+     * 0WS from 0-24MHz
+     * 1WS from 24-48MHz
+     * 2WS from 48-72MHz
+     */
+    flash_set_ws(FLASH_ACR_LATENCY_1WS);
+
+    /*
+     * Set the PLL multiplication factor to 6.
+     * 8MHz (external) * 6 (multiplier) = 48MHz
+     */
+    rcc_set_pll_multiplication_factor(RCC_CFGR_PLLMUL_PLL_CLK_MUL6);
+
+    /* Select HSE as PLL source. */
+    rcc_set_pll_source(RCC_CFGR_PLLSRC_HSE_CLK);
+
+    /*
+     * External frequency undivided before entering PLL
+     * (only valid/needed for HSE).
+     */
+    rcc_set_pllxtpre(RCC_CFGR_PLLXTPRE_HSE_CLK);
+
+    /* Enable PLL oscillator and wait for it to stabilize. */
+    rcc_osc_on(RCC_PLL);
+    rcc_wait_for_osc_ready(RCC_PLL);
+
+    /* Select PLL as SYSCLK source. */
+    rcc_set_sysclk_source(RCC_CFGR_SW_SYSCLKSEL_PLLCLK);
+
+    /* Set the peripheral clock frequencies used */
+    rcc_ahb_frequency = 48000000;
+    rcc_apb1_frequency = 24000000;
+    rcc_apb2_frequency = 48000000;
+}
+
+
+
+int main(void)
+{ 
+	rcc_clock_setup_in_hse_8mhz_out_48mhz();
+
+	usbd_device *usbd_dev;
 
     // try to force re-enumeration by host
     {
@@ -263,10 +322,13 @@ int main(void)
         gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
                   GPIO_CNF_OUTPUT_PUSHPULL, GPIO12);
 
-        // imitate unplug of device
+        // simulate repluging of the device
         gpio_clear(GPIOA, GPIO12);
         gpio_clear(GPIOA, GPIO11);
-        asm("nop"); asm("nop");
+        for (int i = 500; i--;)
+        {
+        	asm("nop");
+        }
 
         // configure as input -> lets the pulls do the job
         gpio_set_mode(GPIOA, GPIO_MODE_INPUT, 0, GPIO11);
@@ -276,6 +338,12 @@ int main(void)
     rcc_periph_clock_enable(RCC_GPIOB);
     gpio_set_mode(USER_BT_PORT, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, USER_BT_PIN);
     gpio_set_mode(USER_LED_PORT, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, USER_LED_PIN);
+
+    // wait some time before checking user button
+    for (int i = 48000; i--;)
+    {
+    	asm("nop");
+    }
 
     if (0 == (gpio_get(USER_BT_PORT, USER_BT_PIN) & USER_BT_PIN)) {
         /* Boot the application if it's valid. */
@@ -290,7 +358,7 @@ int main(void)
         }
     }
 
-    rcc_clock_setup_in_hsi_out_48mhz();
+    // rcc_clock_setup_in_hsi_out_48mhz();
 
     gpio_set(USER_LED_PORT, USER_LED_PIN); // user led off
 

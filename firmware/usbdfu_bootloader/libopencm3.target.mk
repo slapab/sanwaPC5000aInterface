@@ -27,7 +27,7 @@ ARCH_FLAGS	= -mthumb -mcpu=cortex-m3 $(FP_FLAGS) -mfix-cortex-m3-ldrd
 ################################################################################
 # OpenOCD specific variables
 
-OOCD_PATH ?= /opt/openocd/0.10.0-201610281609-dev/bin
+OOCD_PATH ?= /opt/openocd-0.10/bin
 OOCD		?= $(OOCD_PATH)/openocd
 OOCD_INTERFACE	?= ftdi/jtag-lock-pick_tiny_2
 OOCD_INTERFACE_SETTINGS ?= "transport select swd;"
