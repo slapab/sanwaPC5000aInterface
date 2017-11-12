@@ -26,7 +26,7 @@ INTERFACE_VER2 := 2# Sources created for second version of hwardware
 
 ## assign required version for compilation if not defined
 ifndef USING_INTERFACE_VER
-USING_INTERFACE_VER := $(INTERFACE_VER1)
+USING_INTERFACE_VER := $(INTERFACE_VER2)
 endif
 
 ## pass macro USING_INTERFACE_VER and also all possible version to the preprocessor

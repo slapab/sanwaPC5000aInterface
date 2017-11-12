@@ -32,6 +32,30 @@
 
 #endif
 
+#if INTERFACE_VER2 == USING_INTERFACE_VER
+
+#define GPIO_PORT               GPIOB
+#define GPIO_DATA_CLK           GPIO3
+#define GPIO_DATA_IN            GPIO4
+/// Number of pin that is used to receive data
+#define GPIO_DATA_IN_PIN_NO     4
+/// Used timer to generate start impulse and clock signal. See doc. of TIMER of libopencm3.
+#define USED_TIMER_PERIPH       TIM2
+/// Output compare channel number. See doc. of TIMER of libopencm3.
+#define USED_TIMER_OC_CHANNEL   TIM_OC2
+/// Timer Compare/Capture interrupt enable bit. See of "TIMx_DIER Timer DMA and Interrupt Enable Values" of libopencm3.
+#define USED_TIMER_DIER_CCIE    TIM_DIER_CC2IE
+/// NVIC IRQ number that is assigned to used timer. See doc. of NVIC of libopencm3.
+#define USED_TIMER_NVIC_IRQ     NVIC_TIM2_IRQ
+/// EXTI source that is using to detect the DMM readiness. See doc. of EXIT of libopencm3.
+#define USED_EXTI_SOURCE        EXTI4
+/// NVIC IRQ number that is assigned to used EXTI source. See doc. of NVIC of libopencm3.
+#define USED_EXTI_NVIC_IRQ      NVIC_EXTI4_IRQ
+/// Defines the EXTI trigger type. See doc. of EXTI of libopencm3.
+#define USED_EXTI_TRIGGER_TYPE  EXTI_TRIGGER_FALLING
+
+#endif
+
 /**
  * Timer's registers configuration values which are using to generate 10ms-long level on the output pin.
  *
@@ -180,7 +204,7 @@ void ir_itf_init_nb(void) {
     // configure clk pin -> alternate function -> using as PWM output
     gpio_set_mode(GPIO_PORT, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO_DATA_CLK);
 
-#if INTERFACE_VER1 == USING_INTERFACE_VER
+#if INTERFACE_VER1 == USING_INTERFACE_VER || INTERFACE_VER2 == USING_INTERFACE_VER
     // remap TIM2-CH2 to PB3
     gpio_primary_remap(AFIO_MAPR_SWJ_CFG_JTAG_OFF_SW_ON, AFIO_MAPR_TIM2_REMAP_PARTIAL_REMAP1);
 #endif
